@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Main (main) where -- Only export what we need to
@@ -41,23 +42,22 @@ instance Default GameState where def = GameState S.empty 6
 playHangman :: Hangman -> HiddenWord -> GameState -> IO (Result, GameState, Log)
 playHangman = runRWST
 
--- | Helper functions
+-- | Helper function
 io :: MonadIO m => IO a -> m a
 io = liftIO
 
 -- | Main game loop
 gameLoop :: Hangman -- We must return a 'Result' type here since it is our 'a'
 gameLoop = do (game, word) <- (,) <$> get <*> ask
-              let result | game ^. guessesLeft == 0               = return Lose    -- Losing base case
-                         | game ^. guesses     == S.fromList word = return Win     -- Winning base case
-                         | otherwise = do (time, guess) <- io $ getGuess game word -- Loop base case
-                                          if S.member guess $ S.fromList word  -- If guess is correct
-                                          then do put $ game & guesses %~ S.insert guess  -- add to correct guess Set
-                                                  tell $ printf "%c - Correct - at %s\n" guess $ show time -- log guess
-                                          else do put $ game & guessesLeft -~ 1 -- if incorrect, subtract from rem. guesses
-                                                  tell $ printf "%c - InCorrect - at %s\n" guess $ show time -- log guess
-                                          gameLoop 
-              result
+              if | game ^. guessesLeft == 0               -> return Lose    -- Losing base case
+                 | game ^. guesses     == S.fromList word -> return Win     -- Winning base case
+                 | otherwise -> do (time, guess) <- io $ getGuess game word -- Loop base case
+                                   if | S.member guess $ S.fromList word -> -- If guess is correct
+                                          do put $ game & guesses %~ S.insert guess  -- add to correct guess Set
+                                             tell $ printf "%c - Correct - at %s\n" guess $ show time -- log guess
+                                      | True -> do put $ game & guessesLeft -~ 1 -- if incorrect, subtract from rem. guesses
+                                                   tell $ printf "%c - InCorrect - at %s\n" guess $ show time -- log guess
+                                   gameLoop 
 
 -- | Guess sub-method
 getGuess :: GameState -> String -> IO (String, Char)
