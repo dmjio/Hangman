@@ -3,19 +3,20 @@
 
 module Main (main) where
 
-import System.IO 
-import Data.List
-import Data.Char
-import Control.Monad.RWS
+import System.IO (hFlush, stdout)
+import Data.List (intersperse)
+import Data.Char (toLower)
+import Data.Monoid ((<>))
+import Control.Monad.RWS (RWST(..), ask, put, tell, get, MonadIO(..))
 import qualified Data.Set as S
-import Control.Lens
-import Data.Default (Default(..))
+import Control.Lens (makeLenses, (^.), (-~), (&), (%~))
+import Data.Default (Default(def))
 import Text.Printf (printf)
-import Control.Applicative 
+import Control.Applicative ((<*>),(<$>), pure)
 import System.Time (getClockTime)
 
 -- Type Synonyms
-type HiddenWord = String -- To represent 
+type HiddenWord = String -- To represent the word needed for guessing.
 type Log        = String -- To log guesses as they happen
 type Hangman    = RWST HiddenWord String GameState IO Result -- Our 'global' state
 
@@ -62,7 +63,7 @@ gameLoop = do game <- get
                       (,) <$> pure time <*> pure guess
             if S.member guess $ S.fromList hiddenWord
             then do put $ game & guesses %~ S.insert guess
-                    tell $ printf "%c - Correct - %s\n" guess $ show time
+                    tell $ printf "%c - Correct - at %s\n" guess $ show time
             else do put $ game & guessesLeft -~ 1
                     tell $ printf "%c - InCorrect - at %s\n" guess $ show time
             gameLoop
@@ -75,10 +76,11 @@ main = do
   case word of
     [] -> putStrLn "You didn't enter anything" -- cheap validation
     otherwise -> do 
-         (res, _, log) <- playHangman gameLoop word def  
-         case res of
+         (result, _, log) <- playHangman gameLoop word def  
+         case result of
            Win ->  putStrLn "Congratulations You Won!"
            Lose -> putStrLn "Too bad you lost :( "
+         putStrLn $ "Word was: " <> word
          putStrLn "Game log:"
          putStrLn log
          putStrLn "Play again? (y/n)"
