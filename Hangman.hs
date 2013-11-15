@@ -51,13 +51,15 @@ gameLoop :: Hangman -- We must return a 'Result' type here since it is our 'a'
 gameLoop = do (game, word) <- (,) <$> get <*> ask
               if | game ^. guessesLeft == 0               -> return Lose    -- Losing base case
                  | game ^. guesses     == S.fromList word -> return Win     -- Winning base case
-                 | otherwise -> do (time, guess) <- io $ getGuess game word -- Loop base case
-                                   if | S.member guess $ S.fromList word -> -- If guess is correct
-                                          do put $ game & guesses %~ S.insert guess  -- add to correct guess Set
-                                             tell $ printf "%c - Correct - at %s\n" guess $ show time -- log guess
-                                      | True -> do put $ game & guessesLeft -~ 1 -- if incorrect, subtract from rem. guesses
-                                                   tell $ printf "%c - InCorrect - at %s\n" guess $ show time -- log guess
-                                   gameLoop 
+                 | otherwise -> 
+                     do (time, guess) <- io $ getGuess game word -- Loop base case
+                        if | S.member guess $ S.fromList word -> -- If guess is correct
+                               do put $ game & guesses %~ S.insert guess  -- add to correct guess Set
+                                  tell $ printf "%c - Correct - at %s\n" guess $ show time -- log guess
+                           | otherwise -> --o/w == True
+                               do put $ game & guessesLeft -~ 1 -- if incorrect, subtract from rem. guesses
+                                  tell $ printf "%c - InCorrect - at %s\n" guess $ show time -- log guess
+                        gameLoop 
 
 -- | Guess sub-method
 getGuess :: GameState -> String -> IO (String, Char)
@@ -70,7 +72,6 @@ getGuess game word = do
       where 
         time         = head . reverse . drop 2 . reverse . drop 3 . words . show <$> getClockTime 
         display game = intersperse ' ' . map (\letter -> if S.member letter $ game ^. guesses then letter else '_')
-
 
 main :: IO ()              
 main = do
@@ -91,4 +92,3 @@ main = do
          getLine >>= \case -- lambda-case usage
                  "y" -> hFlush stdout >> main
                  otherwise -> putStrLn "Thank you for playing!"
-         
