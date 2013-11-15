@@ -1,13 +1,18 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Main (main) where
+module Main (main) where -- Only export what we need to
 
 import System.IO (hFlush, stdout)
 import Data.List (intersperse)
 import Data.Char (toLower)
 import Data.Monoid ((<>))
-import Control.Monad.RWS (RWST(..), ask, put, tell, get, MonadIO(..))
+import Control.Monad.RWS (RWST(..), 
+                              put,  -- * State  Monad
+                              get,  -- * State  Monad
+                              ask,  -- * Reader Monad
+                              tell, -- * Writer Monad
+                              MonadIO(..))
 import qualified Data.Set as S
 import Control.Lens (makeLenses, (^.), (-~), (&), (%~))
 import Data.Default (Default(def))
@@ -31,7 +36,8 @@ $(makeLenses ''GameState)
 -- Instances
 instance Default GameState where def = GameState S.empty 6
 
--- original sig = RWST r w s m a -> r -> s -> m (a, s, w), do you see how these fit?
+-- Original sig = RWST r w s m a -> r -> s -> m (a, s, w), do you see how these fit?
+-- | Game execution method
 playHangman :: Hangman -> HiddenWord -> GameState -> IO (Result, GameState, Log)
 playHangman = runRWST
 
@@ -39,34 +45,32 @@ playHangman = runRWST
 io :: MonadIO m => IO a -> m a
 io = liftIO
 
-check :: Bool -> Hangman -> Hangman -> Hangman
-check p x y = if p then x else y -- can't use when since it returns m ()
-
 -- | Main game loop
 gameLoop :: Hangman -- We must return a 'Result' type here since it is our 'a'
-gameLoop = do game <- get
-              check (game ^. guessesLeft == 0) (return Lose) $ handleGame game
-    where handleGame game = do
-            hiddenWord <- ask
-            check (game ^. guesses == S.fromList hiddenWord) (return Win) $ handleGuess game
-          handleGuess game = do 
-            hiddenWord <- ask
-            (time,guess) <- io $ do
-                      printf "You have %d guesses left\n" $ game ^. guessesLeft
-                      printf "%s\n" $ intersperse ' ' $ 
-                             map (\letter -> if S.member letter $ game ^. guesses
-                                             then letter
-                                             else '_') hiddenWord
-                      putStr "Guess a letter: " >> hFlush stdout
-                      time <- io $ (head . reverse . drop 2 . reverse . drop 3 . words . show) <$> getClockTime
-                      guess <- head <$> getLine
-                      (,) <$> pure time <*> pure guess
-            if S.member guess $ S.fromList hiddenWord
-            then do put $ game & guesses %~ S.insert guess
-                    tell $ printf "%c - Correct - at %s\n" guess $ show time
-            else do put $ game & guessesLeft -~ 1
-                    tell $ printf "%c - InCorrect - at %s\n" guess $ show time
-            gameLoop
+gameLoop = do (game, word) <- (,) <$> get <*> ask
+              let result | game ^. guessesLeft == 0               = return Lose    -- Losing base case
+                         | game ^. guesses     == S.fromList word = return Win     -- Winning base case
+                         | otherwise = do (time, guess) <- io $ getGuess game word -- Loop base case
+                                          if S.member guess $ S.fromList word  -- If guess is correct
+                                          then do put $ game & guesses %~ S.insert guess  -- add to correct guess Set
+                                                  tell $ printf "%c - Correct - at %s\n" guess $ show time -- log guess
+                                          else do put $ game & guessesLeft -~ 1 -- if incorrect, subtract from rem. guesses
+                                                  tell $ printf "%c - InCorrect - at %s\n" guess $ show time -- log guess
+                                          gameLoop 
+              result
+
+-- | Guess sub-method
+getGuess :: GameState -> String -> IO (String, Char)
+getGuess game word = do 
+  printf "You have %d guesses left\n%s\n" (game ^. guessesLeft) (display game word)
+  putStr "Guess a letter: " >> hFlush stdout
+  guess <- getLine
+  let g | guess == [] = ' ' | True = head guess -- cheap safe head
+  (,) <$> time <*> pure g -- applicative
+      where 
+        time         = head . reverse . drop 2 . reverse . drop 3 . words . show <$> getClockTime 
+        display game = intersperse ' ' . map (\letter -> if S.member letter $ game ^. guesses then letter else '_')
+
 
 main :: IO ()              
 main = do
@@ -76,9 +80,9 @@ main = do
   case word of
     [] -> putStrLn "You didn't enter anything" -- cheap validation
     otherwise -> do 
-         (result, _, log) <- playHangman gameLoop word def  
+         (result, _, log) <- playHangman gameLoop word def  -- Where the men are hung
          case result of
-           Win ->  putStrLn "Congratulations You Won!"
+           Win  -> putStrLn "Congratulations You Won!"
            Lose -> putStrLn "Too bad you lost :( "
          putStrLn $ "Word was: " <> word
          putStrLn "Game log:"
