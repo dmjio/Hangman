@@ -24,7 +24,7 @@ import System.Time (getClockTime)
 -- Type Synonyms
 type HiddenWord = String -- To represent the word needed for guessing.
 type Log        = String -- To log guesses as they happen
-type Hangman    = RWST HiddenWord String GameState IO Result -- Our 'global' state
+type Hangman    = RWST HiddenWord Log GameState IO Result -- Our 'global' state
 
 -- Data Declarations
 data Result     = Win | Lose 
