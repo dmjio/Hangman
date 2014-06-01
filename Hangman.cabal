@@ -1,0 +1,23 @@
+name:                Hangman
+version:             0.1.0.0
+synopsis:            The game of Hangman
+description:         The game of Hangman
+license:             BSD3
+license-file:        LICENSE
+author:              David Johnson
+maintainer:          djohnson.m@gmail.com
+-- copyright:           
+category:            Game
+build-type:          Simple
+cabal-version:       >=1.10
+
+executable Hangman
+  main-is:             Hangman.hs
+  build-depends:       old-time >= 1.1.0.2,
+                       base >=4.7 && <4.8,
+                       data-default,
+                       lens,
+                       time,
+                       containers,
+                       mtl
+  default-language:    Haskell2010
